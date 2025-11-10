@@ -33,10 +33,5 @@
     "mastra": "^0.18.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.46.0"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "difflib@0.2.4": "patches/difflib@0.2.4.patch"
-    }
   }
 }
