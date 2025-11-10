@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "mastra dev",
     "build": "mastra build",
+    "cf:build": "pnpm install --no-frozen-lockfile && pnpm run build",
     "start": "mastra start",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
