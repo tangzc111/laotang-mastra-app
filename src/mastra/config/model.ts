@@ -1,4 +1,18 @@
-import type { MastraModelConfig } from '@mastra/core/llm/model/shared.types';
+import type { MastraModelConfig } from '@mastra/core/llm';
+
+export type RuntimeEnv = Record<string, string | undefined>;
+
+const resolveEnv = (env?: RuntimeEnv): RuntimeEnv => {
+  if (env) {
+    return env;
+  }
+
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env;
+  }
+
+  return {};
+};
 
 type ModelConfigOverride = {
   id: `${string}/${string}`;
@@ -7,8 +21,9 @@ type ModelConfigOverride = {
   headers?: Record<string, string>;
 };
 
-const parseHeaders = (): Record<string, string> | undefined => {
-  const raw = process.env.LLM_EXTRA_HEADERS;
+const parseHeaders = (env?: RuntimeEnv): Record<string, string> | undefined => {
+  const source = resolveEnv(env);
+  const raw = source.LLM_EXTRA_HEADERS;
   if (!raw) return undefined;
 
   try {
@@ -28,11 +43,12 @@ const parseHeaders = (): Record<string, string> | undefined => {
   return undefined;
 };
 
-export const getDefaultModelConfig = (): MastraModelConfig => {
-  const id = (process.env.LLM_MODEL_ID as `${string}/${string}` | undefined) ?? 'openai/gpt-4o-mini';
-  const url = process.env.LLM_BASE_URL;
-  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY;
-  const headers = parseHeaders();
+export const getDefaultModelConfig = (env?: RuntimeEnv): MastraModelConfig => {
+  const source = resolveEnv(env);
+  const id = (source.LLM_MODEL_ID as `${string}/${string}` | undefined) ?? 'openai/gpt-4o-mini';
+  const url = source.LLM_BASE_URL;
+  const apiKey = source.LLM_API_KEY ?? source.OPENAI_API_KEY;
+  const headers = parseHeaders(source);
 
   const override: ModelConfigOverride = { id };
 

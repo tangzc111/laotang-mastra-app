@@ -3,10 +3,22 @@ import { Memory } from '@mastra/memory';
 import { LibSQLStore } from '@mastra/libsql';
 import { weatherTool } from '../tools/weather-tool';
 import { scorers } from '../scorers/weather-scorer';
-import { getDefaultModelConfig } from '../config/model';
+import { getDefaultModelConfig, type RuntimeEnv } from '../config/model';
 
-export const weatherAgent = new Agent({
-  name: 'Weather Agent',
+type AgentEnv = RuntimeEnv & {
+  LIBSQL_URL?: string;
+  LIBSQL_AUTH_TOKEN?: string;
+};
+
+const createMemory = (env?: AgentEnv) =>
+  new LibSQLStore({
+    url: env?.LIBSQL_URL ?? 'file:../mastra.db', // path is relative to the .mastra/output directory
+    ...(env?.LIBSQL_AUTH_TOKEN ? { authToken: env.LIBSQL_AUTH_TOKEN } : {}),
+  });
+
+export const createWeatherAgent = (env?: AgentEnv) =>
+  new Agent({
+    name: 'Weather Agent',
   instructions: `
       You are a helpful weather assistant that provides accurate weather information and can help planning activities based on the weather.
 
@@ -21,7 +33,7 @@ export const weatherAgent = new Agent({
 
       Use the weatherTool to fetch current weather data.
 `,
-  model: getDefaultModelConfig(),
+  model: () => getDefaultModelConfig(env),
   tools: { weatherTool },
   scorers: {
     toolCallAppropriateness: {
@@ -47,8 +59,8 @@ export const weatherAgent = new Agent({
     },
   },
   memory: new Memory({
-    storage: new LibSQLStore({
-      url: 'file:../mastra.db', // path is relative to the .mastra/output directory
-    }),
+    storage: createMemory(env),
   }),
-});
+  });
+
+export const weatherAgent = createWeatherAgent();

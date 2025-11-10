@@ -10,10 +10,10 @@ import { createWorkflow, createStep } from '@mastra/core/workflows';
 import { z, ZodObject, ZodFirstPartyTypeKind } from 'zod';
 import { Agent, tryGenerateWithJsonFallback, tryStreamWithJsonFallback, MessageList, convertMessages } from '@mastra/core/agent';
 import { Memory as Memory$1 } from '@mastra/memory';
-import { weatherTool } from './tools/0349ab70-8602-47da-8ce0-e5519b17419f.mjs';
+import { weatherTool } from './tools/14eb3168-d39f-43a8-8711-916659f53f90.mjs';
 import { createCompletenessScorer, createToolCallAccuracyScorerCode } from '@mastra/evals/scorers/code';
 import { createScorer } from '@mastra/core/scores';
-import { currentTimeTool } from './tools/11f7dd8b-5171-4079-a1a7-925c74ddadb9.mjs';
+import { currentTimeTool } from './tools/b73e3cfb-d830-4305-93a0-2bfbb671d8eb.mjs';
 import crypto$1, { randomUUID } from 'crypto';
 import { readdir, readFile, mkdtemp, rm, writeFile, mkdir, copyFile, stat } from 'fs/promises';
 import * as https from 'https';
@@ -174,7 +174,6 @@ const planActivities = createStep({
     ]);
     let activitiesText = "";
     for await (const chunk of response.textStream) {
-      process.stdout.write(chunk);
       activitiesText += chunk;
     }
     return {
@@ -256,8 +255,18 @@ const scorers = {
   translationScorer
 };
 
-const parseHeaders = () => {
-  const raw = process.env.LLM_EXTRA_HEADERS;
+const resolveEnv = (env) => {
+  if (env) {
+    return env;
+  }
+  if (typeof process !== "undefined" && process.env) {
+    return process.env;
+  }
+  return {};
+};
+const parseHeaders = (env) => {
+  const source = resolveEnv(env);
+  const raw = source.LLM_EXTRA_HEADERS;
   if (!raw) return void 0;
   try {
     const parsed = JSON.parse(raw);
@@ -274,11 +283,12 @@ const parseHeaders = () => {
   }
   return void 0;
 };
-const getDefaultModelConfig = () => {
-  const id = process.env.LLM_MODEL_ID ?? "openai/gpt-4o-mini";
-  const url = process.env.LLM_BASE_URL;
-  const apiKey = process.env.LLM_API_KEY ?? process.env.OPENAI_API_KEY;
-  const headers = parseHeaders();
+const getDefaultModelConfig = (env) => {
+  const source = resolveEnv(env);
+  const id = source.LLM_MODEL_ID ?? "openai/gpt-4o-mini";
+  const url = source.LLM_BASE_URL;
+  const apiKey = source.LLM_API_KEY ?? source.OPENAI_API_KEY;
+  const headers = parseHeaders(source);
   const override = { id };
   if (url) {
     override.url = url;
@@ -293,7 +303,12 @@ const getDefaultModelConfig = () => {
   return hasOverride ? override : id;
 };
 
-const weatherAgent = new Agent({
+const createMemory$1 = (env) => new LibSQLStore({
+  url: env?.LIBSQL_URL ?? "file:../mastra.db",
+  // path is relative to the .mastra/output directory
+  ...env?.LIBSQL_AUTH_TOKEN ? { authToken: env.LIBSQL_AUTH_TOKEN } : {}
+});
+const createWeatherAgent = (env) => new Agent({
   name: "Weather Agent",
   instructions: `
       You are a helpful weather assistant that provides accurate weather information and can help planning activities based on the weather.
@@ -309,7 +324,7 @@ const weatherAgent = new Agent({
 
       Use the weatherTool to fetch current weather data.
 `,
-  model: getDefaultModelConfig(),
+  model: () => getDefaultModelConfig(env),
   tools: { weatherTool },
   scorers: {
     toolCallAppropriateness: {
@@ -335,14 +350,16 @@ const weatherAgent = new Agent({
     }
   },
   memory: new Memory$1({
-    storage: new LibSQLStore({
-      url: "file:../mastra.db"
-      // path is relative to the .mastra/output directory
-    })
+    storage: createMemory$1(env)
   })
 });
+createWeatherAgent();
 
-const sceneScriptAgent = new Agent({
+const createMemory = (env) => new LibSQLStore({
+  url: env?.LIBSQL_URL ?? "file:../mastra.db",
+  ...env?.LIBSQL_AUTH_TOKEN ? { authToken: env.LIBSQL_AUTH_TOKEN } : {}
+});
+const createSceneScriptAgent = (env) => new Agent({
   name: "Scene Script Agent",
   instructions: `
     \u4F60\u662F\u4E00\u540D\u5267\u672C\u901F\u5199\u5E08\uFF0C\u64C5\u957F\u56F4\u7ED5\u7528\u6237\u63D0\u4F9B\u7684\u60F3\u6CD5\uFF0C\u5728\u5F53\u524D\u65F6\u95F4\u8BED\u5883\u4E0B\u521B\u4F5C\u7B80\u77ED\u7684\u573A\u666F\u5C0F\u5267\u672C\u3002
@@ -363,32 +380,37 @@ const sceneScriptAgent = new Agent({
     - \u8282\u594F\u7D27\u51D1\u3001\u5BF9\u767D\u751F\u52A8\uFF0C\u7BC7\u5E45\u63A7\u5236\u5728 2 \u5206\u949F\u4EE5\u5185\u7684\u77ED\u573A\u666F\u3002
     - \u5982\u7528\u6237\u8981\u6C42\u7279\u5B9A\u98CE\u683C\u3001\u7C7B\u578B\u6216\u7528\u9014\uFF08\u5982\u76F4\u64AD\u3001\u77ED\u89C6\u9891\u3001\u60C5\u666F\u5267\uFF09\uFF0C\u9700\u5728\u8BED\u8A00\u4E0E\u821E\u53F0\u6307\u793A\u4E2D\u4F53\u73B0\u3002
   `,
-  model: getDefaultModelConfig(),
+  model: () => getDefaultModelConfig(env),
   tools: { currentTimeTool },
   memory: new Memory$1({
-    storage: new LibSQLStore({
-      url: "file:../mastra.db"
-    })
+    storage: createMemory(env)
   })
 });
+createSceneScriptAgent();
 
-const mastra = new Mastra({
+const createStorage = (env) => new LibSQLStore({
+  // stores observability, scores, ... into memory storage, if it needs to persist, change to file:../mastra.db
+  url: env?.LIBSQL_URL ?? ":memory:",
+  ...env?.LIBSQL_AUTH_TOKEN ? {
+    authToken: env.LIBSQL_AUTH_TOKEN
+  } : {}
+});
+const createMastra = ({
+  env
+} = {}) => new Mastra({
   workflows: {
     weatherWorkflow
   },
   agents: {
-    weatherAgent,
-    sceneScriptAgent
+    weatherAgent: createWeatherAgent(env),
+    sceneScriptAgent: createSceneScriptAgent(env)
   },
   scorers: {
     toolCallAppropriatenessScorer,
     completenessScorer,
     translationScorer
   },
-  storage: new LibSQLStore({
-    // stores observability, scores, ... into memory storage, if it needs to persist, change to file:../mastra.db
-    url: ":memory:"
-  }),
+  storage: createStorage(env),
   logger: new PinoLogger({
     name: "Mastra",
     level: "info"
@@ -404,6 +426,7 @@ const mastra = new Mastra({
     }
   }
 });
+const mastra = createMastra();
 
 // src/utils/mime.ts
 var getMimeType = (filename, mimes = baseMimes) => {

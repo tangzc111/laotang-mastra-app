@@ -1,0 +1,8 @@
+name = "laotang-mastra-app"
+main = "src/worker.ts"
+compatibility_date = "2024-11-10"
+compatibility_flags = ["nodejs_compat"]
+tsconfig = "./tsconfig.json"
+
+[vars]
+LIBSQL_URL = ":memory:"
