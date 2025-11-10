@@ -1,20 +1,11 @@
 import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
-import { LibSQLStore } from '@mastra/libsql';
 import { weatherTool } from '../tools/weather-tool';
 import { scorers } from '../scorers/weather-scorer';
 import { getDefaultModelConfig, type RuntimeEnv } from '../config/model';
+import { createPersistentStore } from '../config/storage';
 
-type AgentEnv = RuntimeEnv & {
-  LIBSQL_URL?: string;
-  LIBSQL_AUTH_TOKEN?: string;
-};
-
-const createMemory = (env?: AgentEnv) =>
-  new LibSQLStore({
-    url: env?.LIBSQL_URL ?? 'file:../mastra.db', // path is relative to the .mastra/output directory
-    ...(env?.LIBSQL_AUTH_TOKEN ? { authToken: env.LIBSQL_AUTH_TOKEN } : {}),
-  });
+type AgentEnv = RuntimeEnv;
 
 export const createWeatherAgent = (env?: AgentEnv) =>
   new Agent({
@@ -59,7 +50,7 @@ export const createWeatherAgent = (env?: AgentEnv) =>
     },
   },
   memory: new Memory({
-    storage: createMemory(env),
+    storage: createPersistentStore(env),
   }),
   });
 

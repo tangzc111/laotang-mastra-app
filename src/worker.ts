@@ -48,7 +48,7 @@ const buildRuntimeEnv = (env: Bindings): RuntimeEnv => ({
   LLM_API_KEY: env.LLM_API_KEY,
   OPENAI_API_KEY: env.OPENAI_API_KEY,
   LLM_EXTRA_HEADERS: env.LLM_EXTRA_HEADERS,
-  LIBSQL_URL: env.LIBSQL_URL ?? ':memory:',
+  LIBSQL_URL: env.LIBSQL_URL,
   LIBSQL_AUTH_TOKEN: env.LIBSQL_AUTH_TOKEN,
 });
 
@@ -61,13 +61,13 @@ const serializeEnv = (env: RuntimeEnv) => {
 };
 
 let cachedEnvSignature: string | null = null;
-let cachedMastra = createMastra();
+let cachedMastra: ReturnType<typeof createMastra> | null = null;
 
 const getMastra = (env: Bindings) => {
   const runtimeEnv = buildRuntimeEnv(env);
   const signature = serializeEnv(runtimeEnv);
 
-  if (!cachedEnvSignature || cachedEnvSignature !== signature) {
+  if (!cachedEnvSignature || cachedEnvSignature !== signature || !cachedMastra) {
     cachedMastra = createMastra({ env: runtimeEnv });
     cachedEnvSignature = signature;
   }
