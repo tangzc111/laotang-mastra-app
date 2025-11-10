@@ -1,6 +1,5 @@
 import { z, ZodError } from 'zod';
 import type { MessageListInput } from '@mastra/core/agent/message-list';
-import { createMastra } from './mastra';
 import type { RuntimeEnv } from './mastra/config/model';
 
 type WorkerEnvBindings = {
@@ -60,19 +59,29 @@ const serializeEnv = (env: RuntimeEnv) => {
   return JSON.stringify(Object.fromEntries(sortedEntries));
 };
 
-let cachedEnvSignature: string | null = null;
-let cachedMastra: ReturnType<typeof createMastra> | null = null;
+type MastraModule = typeof import('./mastra');
 
-const getMastra = (env: Bindings) => {
+let mastraModulePromise: Promise<MastraModule> | null = null;
+const loadMastraModule = () => {
+  if (!mastraModulePromise) {
+    mastraModulePromise = import('./mastra');
+  }
+  return mastraModulePromise;
+};
+
+let cachedEnvSignature: string | null = null;
+let cachedMastraPromise: Promise<ReturnType<MastraModule['createMastra']>> | null = null;
+
+const getMastra = async (env: Bindings) => {
   const runtimeEnv = buildRuntimeEnv(env);
   const signature = serializeEnv(runtimeEnv);
 
-  if (!cachedEnvSignature || cachedEnvSignature !== signature || !cachedMastra) {
-    cachedMastra = createMastra({ env: runtimeEnv });
+  if (!cachedEnvSignature || cachedEnvSignature !== signature || !cachedMastraPromise) {
+    cachedMastraPromise = loadMastraModule().then(({ createMastra }) => createMastra({ env: runtimeEnv }));
     cachedEnvSignature = signature;
   }
 
-  return cachedMastra;
+  return cachedMastraPromise;
 };
 
 const sceneScriptSchema = z
@@ -102,7 +111,7 @@ const handleSceneScript = async (request: Request, env: Bindings) => {
   const body = await request.json();
   const input = sceneScriptSchema.parse(body);
 
-  const mastra = getMastra(env);
+  const mastra = await getMastra(env);
   const agent = mastra.getAgent('sceneScriptAgent');
 
   if (!agent) {
@@ -135,7 +144,7 @@ const handleWeather = async (request: Request, env: Bindings) => {
   const body = await request.json();
   const input = weatherSchema.parse(body);
 
-  const mastra = getMastra(env);
+  const mastra = await getMastra(env);
   const agent = mastra.getAgent('weatherAgent');
 
   if (!agent) {
