@@ -1,2 +1,5 @@
+packages:
+  - .
+
 patchedDependencies:
   difflib@0.2.4: patches/difflib@0.2.4.patch
