@@ -1,6 +1,6 @@
-import { z, ZodError } from 'zod';
-import type { MessageListInput } from '@mastra/core/agent/message-list';
-import type { RuntimeEnv } from './mastra/config/model';
+import { z, ZodError } from "zod";
+import type { MessageListInput } from "@mastra/core/agent/message-list";
+import type { RuntimeEnv } from "./mastra/config/model";
 
 type WorkerEnvBindings = {
   LLM_MODEL_ID?: string;
@@ -15,14 +15,14 @@ type WorkerEnvBindings = {
 type Bindings = WorkerEnvBindings;
 
 const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
 const jsonResponse = (data: unknown, init: number | ResponseInit = 200) => {
   const base: ResponseInit =
-    typeof init === 'number'
+    typeof init === "number"
       ? { status: init }
       : {
           status: init.status ?? 200,
@@ -30,7 +30,7 @@ const jsonResponse = (data: unknown, init: number | ResponseInit = 200) => {
         };
 
   const headers = new Headers(base.headers);
-  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.set("Content-Type", "application/json; charset=utf-8");
   for (const [key, value] of Object.entries(corsHeaders)) {
     headers.set(key, value);
   }
@@ -59,44 +59,38 @@ const serializeEnv = (env: RuntimeEnv) => {
   return JSON.stringify(Object.fromEntries(sortedEntries));
 };
 
-type MastraModule = typeof import('./mastra');
+type MastraModule = typeof import("./mastra");
 
 let mastraModulePromise: Promise<MastraModule> | null = null;
 const loadMastraModule = () => {
   if (!mastraModulePromise) {
-    mastraModulePromise = import('./mastra');
+    mastraModulePromise = import("./mastra");
   }
   return mastraModulePromise;
 };
 
 let cachedEnvSignature: string | null = null;
-let cachedMastraPromise: Promise<ReturnType<MastraModule['createMastra']>> | null = null;
+let cachedMastraPromise: Promise<
+  ReturnType<MastraModule["createMastra"]>
+> | null = null;
 
 const getMastra = async (env: Bindings) => {
   const runtimeEnv = buildRuntimeEnv(env);
   const signature = serializeEnv(runtimeEnv);
 
-  if (!cachedEnvSignature || cachedEnvSignature !== signature || !cachedMastraPromise) {
-    cachedMastraPromise = loadMastraModule().then(({ createMastra }) => createMastra({ env: runtimeEnv }));
+  if (
+    !cachedEnvSignature ||
+    cachedEnvSignature !== signature ||
+    !cachedMastraPromise
+  ) {
+    cachedMastraPromise = loadMastraModule().then(({ createMastra }) =>
+      createMastra({ env: runtimeEnv })
+    );
     cachedEnvSignature = signature;
   }
 
   return cachedMastraPromise;
 };
-
-const nonEmptyContentObjectSchema = z
-  .object({})
-  .passthrough()
-  .refine((value) => Object.keys(value).length > 0, {
-    message: 'Content object cannot be empty',
-  });
-
-const nonEmptyStringSchema = z.string().min(1);
-const messageContentSchema = z.union([
-  nonEmptyStringSchema,
-  z.array(z.union([nonEmptyStringSchema, nonEmptyContentObjectSchema])).min(1),
-  nonEmptyContentObjectSchema,
-]);
 
 const sceneScriptSchema = z
   .object({
@@ -104,17 +98,18 @@ const sceneScriptSchema = z
     messages: z
       .array(
         z.object({
-          role: z.enum(['user', 'assistant', 'system']),
-          content: messageContentSchema,
-        }),
+          role: z.enum(["user", "assistant", "system"]),
+          content: z.string().min(1),
+        })
       )
       .optional(),
     threadId: z.string().optional(),
     resourceId: z.string().optional(),
   })
   .refine(
-    (value) => Boolean(value.prompt) || (value.messages && value.messages.length > 0),
-    { message: 'Provide either prompt or messages.' },
+    (value) =>
+      Boolean(value.prompt) || (value.messages && value.messages.length > 0),
+    { message: "Provide either prompt or messages." }
   );
 
 const weatherSchema = z.object({
@@ -126,26 +121,33 @@ const handleSceneScript = async (request: Request, env: Bindings) => {
   const input = sceneScriptSchema.parse(body);
 
   const mastra = await getMastra(env);
-  const agent = mastra.getAgent('sceneScriptAgent');
+  const agent = mastra.getAgent("sceneScriptAgent");
 
   if (!agent) {
-    return jsonResponse({ error: 'Scene Script agent is not configured.' }, 500);
+    return jsonResponse(
+      { error: "Scene Script agent is not configured." },
+      500
+    );
   }
 
   const messages: MessageListInput = input.messages
     ? (input.messages as MessageListInput)
-    : ([{ role: 'user' as const, content: input.prompt! }] as MessageListInput);
+    : ([{ role: "user" as const, content: input.prompt! }] as MessageListInput);
 
   const output = await agent.generate(messages, {
     memory: input.threadId
       ? {
           thread: input.threadId,
-          resource: input.resourceId ?? 'scene-script',
+          resource: input.resourceId ?? "scene-script",
         }
       : undefined,
   });
 
-  const [text, usage, finishReason] = await Promise.all([output.text, output.usage, output.finishReason]);
+  const [text, usage, finishReason] = await Promise.all([
+    output.text,
+    output.usage,
+    output.finishReason,
+  ]);
 
   return jsonResponse({
     text,
@@ -159,20 +161,24 @@ const handleWeather = async (request: Request, env: Bindings) => {
   const input = weatherSchema.parse(body);
 
   const mastra = await getMastra(env);
-  const agent = mastra.getAgent('weatherAgent');
+  const agent = mastra.getAgent("weatherAgent");
 
   if (!agent) {
-    return jsonResponse({ error: 'Weather agent is not configured.' }, 500);
+    return jsonResponse({ error: "Weather agent is not configured." }, 500);
   }
 
   const output = await agent.generate([
     {
-      role: 'user',
+      role: "user",
       content: input.prompt,
     },
   ]);
 
-  const [text, usage, finishReason] = await Promise.all([output.text, output.usage, output.finishReason]);
+  const [text, usage, finishReason] = await Promise.all([
+    output.text,
+    output.usage,
+    output.finishReason,
+  ]);
 
   return jsonResponse({
     text,
@@ -185,47 +191,47 @@ export default {
   async fetch(request: Request, env: Bindings): Promise<Response> {
     const url = new URL(request.url);
 
-    if (request.method === 'OPTIONS') {
+    if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
         headers: corsHeaders,
       });
     }
 
-    if (request.method === 'GET' && url.pathname === '/') {
+    if (request.method === "GET" && url.pathname === "/") {
       return jsonResponse({
         ok: true,
-        message: 'Mastra worker is running',
+        message: "Mastra worker is running",
       });
     }
 
     try {
-      if (request.method === 'POST' && url.pathname === '/api/scene-script') {
+      if (request.method === "POST" && url.pathname === "/api/scene-script") {
         return await handleSceneScript(request, env);
       }
 
-      if (request.method === 'POST' && url.pathname === '/api/weather') {
+      if (request.method === "POST" && url.pathname === "/api/weather") {
         return await handleWeather(request, env);
       }
     } catch (error) {
       if (error instanceof ZodError) {
         return jsonResponse(
           {
-            error: 'Invalid request payload',
+            error: "Invalid request payload",
             issues: error.flatten(),
           },
-          400,
+          400
         );
       }
 
       if (error instanceof SyntaxError) {
-        return jsonResponse({ error: 'Invalid JSON body' }, 400);
+        return jsonResponse({ error: "Invalid JSON body" }, 400);
       }
 
-      console.error('Worker error', error);
-      return jsonResponse({ error: 'Internal Server Error' }, 500);
+      console.error("Worker error", error);
+      return jsonResponse({ error: "Internal Server Error" }, 500);
     }
 
-    return jsonResponse({ error: 'Not Found' }, 404);
+    return jsonResponse({ error: "Not Found" }, 404);
   },
 };
