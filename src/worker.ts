@@ -84,6 +84,20 @@ const getMastra = async (env: Bindings) => {
   return cachedMastraPromise;
 };
 
+const nonEmptyContentObjectSchema = z
+  .object({})
+  .passthrough()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Content object cannot be empty',
+  });
+
+const nonEmptyStringSchema = z.string().min(1);
+const messageContentSchema = z.union([
+  nonEmptyStringSchema,
+  z.array(z.union([nonEmptyStringSchema, nonEmptyContentObjectSchema])).min(1),
+  nonEmptyContentObjectSchema,
+]);
+
 const sceneScriptSchema = z
   .object({
     prompt: z.string().min(1).max(4000).optional(),
@@ -91,7 +105,7 @@ const sceneScriptSchema = z
       .array(
         z.object({
           role: z.enum(['user', 'assistant', 'system']),
-          content: z.string().min(1),
+          content: messageContentSchema,
         }),
       )
       .optional(),
