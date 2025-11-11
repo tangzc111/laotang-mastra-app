@@ -122,7 +122,7 @@ const handleSceneScript = async (request: Request, env: Bindings) => {
     ? (input.messages as MessageListInput)
     : ([{ role: 'user' as const, content: input.prompt! }] as MessageListInput);
 
-  const output = await agent.generate(messages, {
+  const output = await agent.stream(messages, {
     memory: input.threadId
       ? {
           thread: input.threadId,
