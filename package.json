@@ -32,6 +32,6 @@
     "@types/node": "^24.10.0",
     "mastra": "^0.18.0",
     "typescript": "^5.9.3",
-    "wrangler": "^4.46.0"
+    "wrangler": "^4.47.0"
   }
 }
