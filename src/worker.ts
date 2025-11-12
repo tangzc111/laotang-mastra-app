@@ -127,6 +127,16 @@ const getMastra = async (env: Bindings) => {
   return cachedMastraPromise;
 };
 
+const structuredContentSchema = z.object({
+  type: z.literal("text"),
+  text: z.string().min(1),
+});
+
+const messageContentSchema = z.union([
+  z.string().min(1),
+  z.array(structuredContentSchema).min(1),
+]);
+
 const sceneScriptSchema = z
   .object({
     prompt: z.string().min(1).max(4000).optional(),
@@ -134,7 +144,7 @@ const sceneScriptSchema = z
       .array(
         z.object({
           role: z.enum(["user", "assistant", "system"]),
-          content: z.string().min(1),
+          content: messageContentSchema,
         })
       )
       .optional(),
@@ -146,6 +156,13 @@ const sceneScriptSchema = z
       Boolean(value.prompt) || (value.messages && value.messages.length > 0),
     { message: "Provide either prompt or messages." }
   );
+
+type SceneScriptMessageContent = z.infer<typeof messageContentSchema>;
+
+const normalizeMessageContent = (content: SceneScriptMessageContent) =>
+  typeof content === "string"
+    ? content
+    : content.map((part) => part.text).join("\n\n");
 
 const weatherSchema = z.object({
   prompt: z.string().min(1).max(4000),
@@ -175,9 +192,16 @@ const handleSceneScript = async (request: Request, env: Bindings) => {
     );
   }
 
-  const messages: MessageListInput = input.messages
-    ? (input.messages as MessageListInput)
-    : ([{ role: "user" as const, content: input.prompt! }] as MessageListInput);
+  const normalizedMessages = input.messages
+    ? (input.messages.map((message) => ({
+        role: message.role,
+        content: normalizeMessageContent(message.content),
+      })) as MessageListInput)
+    : undefined;
+
+  const messages: MessageListInput =
+    normalizedMessages ??
+    ([{ role: "user" as const, content: input.prompt! }] as MessageListInput);
 
   const output = await agent.generate(messages, {
     memory: input.threadId
